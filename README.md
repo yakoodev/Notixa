@@ -1,20 +1,22 @@
+[Русская версия](README.md) | [English](README.en.md)
+
 # Notixa
 
-Notixa is a small ASP.NET Core 8 service that combines:
-- a Telegram bot for platform administration and subscriptions
-- a private HTTP API for sending notifications
-- SQLite storage for services, invites, templates, and delivery logs
+Notixa - это небольшой сервис на ASP.NET Core 8, который объединяет:
+- Telegram-бота для администрирования платформы и подписок
+- приватный HTTP API для отправки уведомлений
+- SQLite-хранилище для сервисов, инвайтов, шаблонов и логов доставки
 
-## Features
+## Возможности
 
-- create notification services from Telegram
-- issue general or personal invite codes
-- subscribe Telegram users to services
-- send raw text notifications or render stored templates
-- manage service admins from the bot
-- run locally with SQLite or in Docker
+- создание сервисов уведомлений через Telegram
+- выпуск общих и персональных инвайт-кодов
+- подписка Telegram-пользователей на сервисы
+- отправка простого текста или уведомлений по шаблонам
+- управление администраторами сервисов через бота
+- локальный запуск с SQLite или в Docker
 
-## Stack
+## Стек
 
 - .NET 8
 - ASP.NET Core Web API
@@ -22,32 +24,32 @@ Notixa is a small ASP.NET Core 8 service that combines:
 - Telegram.Bot
 - xUnit
 
-## Configuration
+## Конфигурация
 
-The application reads settings from `appsettings.json`, `appsettings.Development.json`, environment variables, or Docker environment overrides.
+Приложение читает настройки из `appsettings.json`, `appsettings.Development.json`, переменных окружения и Docker-переопределений.
 
-Required values:
+Обязательные параметры:
 
-| Key | Description |
+| Ключ | Описание |
 | --- | --- |
-| `TelegramBot__BotToken` | Token issued by `@BotFather` |
-| `TelegramBot__BotUsername` | Bot username without `@` |
-| `Security__SuperAdminTelegramUserId` | Telegram user id of the first platform admin |
+| `TelegramBot__BotToken` | Токен, выданный `@BotFather` |
+| `TelegramBot__BotUsername` | Username бота без `@` |
+| `Security__SuperAdminTelegramUserId` | Telegram user id первого администратора платформы |
 
-Optional values:
+Необязательные параметры:
 
-| Key | Default | Description |
+| Ключ | По умолчанию | Описание |
 | --- | --- | --- |
-| `TelegramBot__UpdateMode` | `LongPolling` | `LongPolling` or `Webhook` |
-| `TelegramBot__WebhookBaseUrl` | empty | Public base URL used for webhook mode |
-| `Storage__ConnectionString` | `Data Source=app_data/telegram-notifications.db` | SQLite connection string |
+| `TelegramBot__UpdateMode` | `LongPolling` | `LongPolling` или `Webhook` |
+| `TelegramBot__WebhookBaseUrl` | пусто | Публичный базовый URL для webhook-режима |
+| `Storage__ConnectionString` | `Data Source=app_data/telegram-notifications.db` | Строка подключения SQLite |
 
-## Local Run
+## Локальный запуск
 
-1. Install [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0).
-2. Create a Telegram bot with `@BotFather`.
-3. Export the required environment variables.
-4. Start the API:
+1. Установи [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0).
+2. Создай Telegram-бота через `@BotFather`.
+3. Задай обязательные переменные окружения.
+4. Запусти API:
 
 ```powershell
 $env:TelegramBot__BotToken="YOUR_BOT_TOKEN"
@@ -56,22 +58,22 @@ $env:Security__SuperAdminTelegramUserId="123456789"
 dotnet run --project .\TelegramNotifications.Api\
 ```
 
-5. Open Swagger in development mode at `https://localhost:7136/swagger` or `http://localhost:5212/swagger`.
-6. Open the bot in Telegram and send `/start`.
+5. В режиме разработки Swagger будет доступен по `https://localhost:7136/swagger` или `http://localhost:5212/swagger`.
+6. Открой бота в Telegram и отправь `/start`.
 
-## Docker Run
+## Запуск в Docker
 
-1. Copy `.env.example` to `.env`.
-2. Fill in the Telegram values.
-3. Start the stack:
+1. Скопируй `.env.example` в `.env`.
+2. Заполни Telegram-параметры.
+3. Подними контейнер:
 
 ```powershell
 docker compose up --build
 ```
 
-The container listens on `http://localhost:8080`.
+Контейнер слушает `http://localhost:8080`.
 
-## Telegram Commands
+## Команды бота
 
 ```text
 /start
@@ -88,13 +90,13 @@ The container listens on `http://localhost:8080`.
 /deny_creator telegramUserId
 ```
 
-Any non-command text is treated as an invite code.
+Любой некомандный текст обрабатывается как инвайт-код.
 
 ## Notification API
 
-Send either direct text or a stored template to all subscribers or to targeted recipients.
+Можно отправлять либо прямой текст, либо сохранённый шаблон всем подписчикам или только выбранным получателям.
 
-Example request with direct text:
+Пример запроса с прямым текстом:
 
 ```json
 {
@@ -105,7 +107,7 @@ Example request with direct text:
 }
 ```
 
-Example request with a template:
+Пример запроса с шаблоном:
 
 ```json
 {
@@ -117,7 +119,7 @@ Example request with a template:
 }
 ```
 
-Example `curl` call:
+Пример `curl`-запроса:
 
 ```bash
 curl -X POST http://localhost:5212/api/notifications/send \
@@ -129,24 +131,24 @@ curl -X POST http://localhost:5212/api/notifications/send \
   }'
 ```
 
-## Typical First-Time Flow
+## Типовой первый сценарий
 
-1. Start the app.
-2. Send `/start` to the bot.
-3. Create a service with `/create_service Orders | Order notifications`.
-4. Copy the `PublicId` and `ServiceKey` from the bot response.
-5. Generate an invite with `/generate_general_invite <PublicId>`.
-6. Redeem the invite from the target Telegram account.
-7. Send a test notification through `/api/notifications/send`.
+1. Запусти приложение.
+2. Отправь `/start` боту.
+3. Создай сервис командой `/create_service Orders | Order notifications`.
+4. Скопируй `PublicId` и `ServiceKey` из ответа бота.
+5. Создай инвайт через `/generate_general_invite <PublicId>`.
+6. Активируй инвайт с целевого Telegram-аккаунта.
+7. Отправь тестовое уведомление через `/api/notifications/send`.
 
-## Tests
+## Тесты
 
 ```powershell
 dotnet test
 ```
 
-## Security Notes
+## Безопасность
 
-- The repository intentionally does not contain bot tokens, personal Telegram ids, local databases, or helper scripts.
-- Use environment variables or private local config for secrets.
-- Rotate the Telegram bot token before production use if it was ever exposed outside a trusted local environment.
+- Репозиторий намеренно не содержит bot token, персональные Telegram id, локальные базы данных и helper-скрипты.
+- Для секретов используй переменные окружения или приватный локальный конфиг.
+- Если bot token когда-либо светился вне доверенной локальной среды, перед продом его нужно перевыпустить.
