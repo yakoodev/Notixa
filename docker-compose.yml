@@ -1,8 +1,10 @@
+name: notixa
+
 services:
-  telegram-notifications:
+  notixa:
     build:
       context: .
-      dockerfile: TelegramNotifications.Api/Dockerfile
+      dockerfile: Notixa.Api/Dockerfile
     ports:
       - "8080:8080"
     environment:
@@ -11,9 +13,9 @@ services:
       TelegramBot__UpdateMode: "${TELEGRAM_UPDATE_MODE:-LongPolling}"
       TelegramBot__WebhookBaseUrl: "${TELEGRAM_WEBHOOK_BASE_URL:-}"
       Security__SuperAdminTelegramUserId: "${SUPER_ADMIN_TELEGRAM_USER_ID:-0}"
-      Storage__ConnectionString: "Data Source=/app/app_data/telegram-notifications.db"
+      Storage__ConnectionString: "Data Source=/app/app_data/notixa.db"
     volumes:
-      - telegram_notifications_data:/app/app_data
+      - notixa_data:/app/app_data
 
 volumes:
-  telegram_notifications_data:
+  notixa_data:

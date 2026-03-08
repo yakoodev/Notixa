@@ -42,7 +42,7 @@ Optional values:
 | --- | --- | --- |
 | `TelegramBot__UpdateMode` | `LongPolling` | `LongPolling` or `Webhook` |
 | `TelegramBot__WebhookBaseUrl` | empty | Public base URL used for webhook mode |
-| `Storage__ConnectionString` | `Data Source=app_data/telegram-notifications.db` | SQLite connection string |
+| `Storage__ConnectionString` | `Data Source=app_data/notixa.db` | SQLite connection string |
 
 ## Local Run
 
@@ -55,7 +55,7 @@ Optional values:
 $env:TelegramBot__BotToken="YOUR_BOT_TOKEN"
 $env:TelegramBot__BotUsername="your_bot_username"
 $env:Security__SuperAdminTelegramUserId="123456789"
-dotnet run --project .\TelegramNotifications.Api\
+dotnet run --project .\Notixa.Api\
 ```
 
 5. Open Swagger in development mode at `https://localhost:7136/swagger` or `http://localhost:5212/swagger`.
