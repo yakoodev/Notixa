@@ -105,7 +105,27 @@ Any non-command text is treated as an invite code.
 
 Send either direct text or a stored template to all subscribers or to targeted recipients.
 
-Example request with direct text:
+Basic rules:
+
+- Use either `text` or `templateKey`.
+- For `text`, you can pass `parseMode`: `PlainText`, `Html`, `Markdown`, or `MarkdownV2`.
+- If `recipientExternalKeys` is omitted, the notification is sent to all subscribers of the service.
+- If `recipientExternalKeys` is present, the notification is sent only to the listed external keys.
+
+### Request combinations
+
+1. Direct text, `PlainText`, one recipient
+
+```json
+{
+  "serviceKey": "svc_...",
+  "text": "Order #1234 has been paid",
+  "parseMode": "PlainText",
+  "recipientExternalKeys": ["user1"]
+}
+```
+
+2. Direct text, `Html`, one recipient
 
 ```json
 {
@@ -116,7 +136,40 @@ Example request with direct text:
 }
 ```
 
-Example request with a template:
+3. Direct text, `PlainText`, all subscribers
+
+```json
+{
+  "serviceKey": "svc_...",
+  "text": "Broadcast notification to all subscribers",
+  "parseMode": "PlainText"
+}
+```
+
+4. Direct text, `Html`, all subscribers
+
+```json
+{
+  "serviceKey": "svc_...",
+  "text": "<b>Deployment finished</b>\nAll checks passed",
+  "parseMode": "Html"
+}
+```
+
+5. Template, one recipient
+
+```json
+{
+  "serviceKey": "svc_...",
+  "templateKey": "build-failed",
+  "variables": {
+    "name": "frontend"
+  },
+  "recipientExternalKeys": ["user1"]
+}
+```
+
+6. Template, all subscribers
 
 ```json
 {
@@ -128,7 +181,97 @@ Example request with a template:
 }
 ```
 
-Example `curl` call:
+7. Template, selected group of recipients
+
+```json
+{
+  "serviceKey": "svc_...",
+  "templateKey": "order-paid",
+  "variables": {
+    "orderId": "1234",
+    "amount": "$15.00"
+  },
+  "recipientExternalKeys": ["user1", "user2", "user3"]
+}
+```
+
+### JavaScript examples
+
+`fetch`: direct text to one recipient
+
+```js
+await fetch("http://localhost:8080/api/notifications/send", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({
+    serviceKey: "svc_...",
+    text: "Order #1234 has been paid",
+    parseMode: "PlainText",
+    recipientExternalKeys: ["user1"]
+  })
+});
+```
+
+`fetch`: HTML to all subscribers
+
+```js
+await fetch("http://localhost:8080/api/notifications/send", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({
+    serviceKey: "svc_...",
+    text: "<b>Deployment finished</b>",
+    parseMode: "Html"
+  })
+});
+```
+
+`fetch`: template to one recipient
+
+```js
+await fetch("http://localhost:8080/api/notifications/send", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({
+    serviceKey: "svc_...",
+    templateKey: "order-paid",
+    variables: {
+      orderId: "1234",
+      customerName: "John",
+      amount: "$15.00"
+    },
+    recipientExternalKeys: ["user1"]
+  })
+});
+```
+
+`fetch`: template to all subscribers
+
+```js
+await fetch("http://localhost:8080/api/notifications/send", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({
+    serviceKey: "svc_...",
+    templateKey: "order-paid",
+    variables: {
+      orderId: "1234",
+      customerName: "John",
+      amount: "$15.00"
+    }
+  })
+});
+```
+
+### curl examples
 
 ```bash
 curl -X POST http://localhost:5212/api/notifications/send \
@@ -137,6 +280,29 @@ curl -X POST http://localhost:5212/api/notifications/send \
     "serviceKey": "svc_...",
     "text": "Build frontend failed",
     "parseMode": "PlainText"
+  }'
+```
+
+```bash
+curl -X POST http://localhost:5212/api/notifications/send \
+  -H "Content-Type: application/json" \
+  -d '{
+    "serviceKey": "svc_...",
+    "text": "<b>Build failed</b>",
+    "parseMode": "Html",
+    "recipientExternalKeys": ["user1"]
+  }'
+```
+
+```bash
+curl -X POST http://localhost:5212/api/notifications/send \
+  -H "Content-Type: application/json" \
+  -d '{
+    "serviceKey": "svc_...",
+    "templateKey": "build-failed",
+    "variables": {
+      "name": "frontend"
+    }
   }'
 ```
 

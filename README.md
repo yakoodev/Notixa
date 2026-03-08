@@ -105,7 +105,27 @@ docker compose up --build
 
 Можно отправлять либо прямой текст, либо сохранённый шаблон всем подписчикам или только выбранным получателям.
 
-Пример запроса с прямым текстом:
+Базовые правила:
+
+- Используй либо `text`, либо `templateKey`.
+- Для `text` можно передать `parseMode`: `PlainText`, `Html`, `Markdown`, `MarkdownV2`.
+- Если `recipientExternalKeys` не передан, уведомление уйдет всем подписчикам сервиса.
+- Если `recipientExternalKeys` передан, уведомление уйдет только указанным внешним ключам.
+
+### Варианты запросов
+
+1. Прямой текст, `PlainText`, одному получателю
+
+```json
+{
+  "serviceKey": "svc_...",
+  "text": "Заказ #1234 оплачен",
+  "parseMode": "PlainText",
+  "recipientExternalKeys": ["user1"]
+}
+```
+
+2. Прямой текст, `Html`, одному получателю
 
 ```json
 {
@@ -116,7 +136,40 @@ docker compose up --build
 }
 ```
 
-Пример запроса с шаблоном:
+3. Прямой текст, `PlainText`, всем подписчикам
+
+```json
+{
+  "serviceKey": "svc_...",
+  "text": "Общее уведомление для всех подписчиков",
+  "parseMode": "PlainText"
+}
+```
+
+4. Прямой текст, `Html`, всем подписчикам
+
+```json
+{
+  "serviceKey": "svc_...",
+  "text": "<b>Сборка завершена</b>\nВсе проверки прошли успешно",
+  "parseMode": "Html"
+}
+```
+
+5. Шаблон, одному получателю
+
+```json
+{
+  "serviceKey": "svc_...",
+  "templateKey": "build-failed",
+  "variables": {
+    "name": "frontend"
+  },
+  "recipientExternalKeys": ["user1"]
+}
+```
+
+6. Шаблон, всем подписчикам
 
 ```json
 {
@@ -128,7 +181,97 @@ docker compose up --build
 }
 ```
 
-Пример `curl`-запроса:
+7. Шаблон, нескольким выбранным получателям
+
+```json
+{
+  "serviceKey": "svc_...",
+  "templateKey": "order-paid",
+  "variables": {
+    "orderId": "1234",
+    "amount": "1500 ₽"
+  },
+  "recipientExternalKeys": ["user1", "user2", "user3"]
+}
+```
+
+### Примеры JavaScript
+
+`fetch`: прямой текст одному получателю
+
+```js
+await fetch("http://localhost:8080/api/notifications/send", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({
+    serviceKey: "svc_...",
+    text: "Заказ #1234 оплачен",
+    parseMode: "PlainText",
+    recipientExternalKeys: ["user1"]
+  })
+});
+```
+
+`fetch`: HTML всем подписчикам
+
+```js
+await fetch("http://localhost:8080/api/notifications/send", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({
+    serviceKey: "svc_...",
+    text: "<b>Сборка завершена</b>",
+    parseMode: "Html"
+  })
+});
+```
+
+`fetch`: шаблон одному получателю
+
+```js
+await fetch("http://localhost:8080/api/notifications/send", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({
+    serviceKey: "svc_...",
+    templateKey: "order-paid",
+    variables: {
+      orderId: "1234",
+      customerName: "Иван",
+      amount: "1500 ₽"
+    },
+    recipientExternalKeys: ["user1"]
+  })
+});
+```
+
+`fetch`: шаблон всем подписчикам
+
+```js
+await fetch("http://localhost:8080/api/notifications/send", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({
+    serviceKey: "svc_...",
+    templateKey: "order-paid",
+    variables: {
+      orderId: "1234",
+      customerName: "Иван",
+      amount: "1500 ₽"
+    }
+  })
+});
+```
+
+### Примеры curl
 
 ```bash
 curl -X POST http://localhost:5212/api/notifications/send \
@@ -137,6 +280,29 @@ curl -X POST http://localhost:5212/api/notifications/send \
     "serviceKey": "svc_...",
     "text": "Build frontend failed",
     "parseMode": "PlainText"
+  }'
+```
+
+```bash
+curl -X POST http://localhost:5212/api/notifications/send \
+  -H "Content-Type: application/json" \
+  -d '{
+    "serviceKey": "svc_...",
+    "text": "<b>Build failed</b>",
+    "parseMode": "Html",
+    "recipientExternalKeys": ["user1"]
+  }'
+```
+
+```bash
+curl -X POST http://localhost:5212/api/notifications/send \
+  -H "Content-Type: application/json" \
+  -d '{
+    "serviceKey": "svc_...",
+    "templateKey": "build-failed",
+    "variables": {
+      "name": "frontend"
+    }
   }'
 ```
 
