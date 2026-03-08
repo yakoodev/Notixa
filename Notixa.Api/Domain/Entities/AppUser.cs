@@ -10,6 +10,10 @@ public sealed class AppUser
 
     public bool CanCreateServices { get; set; }
 
+    public long? LastBotChatId { get; set; }
+
+    public int? LastBotMessageId { get; set; }
+
     public DateTimeOffset CreatedAtUtc { get; set; }
 
     public DateTimeOffset UpdatedAtUtc { get; set; }

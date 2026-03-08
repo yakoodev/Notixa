@@ -43,6 +43,27 @@ public sealed class PlatformAdministrationService(
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task<BotScreenState> GetBotScreenStateAsync(long telegramUserId, CancellationToken cancellationToken)
+    {
+        var user = await dbContext.Users.AsNoTracking()
+            .SingleOrDefaultAsync(x => x.TelegramUserId == telegramUserId, cancellationToken);
+
+        return user is null
+            ? new BotScreenState(null, null)
+            : new BotScreenState(user.LastBotChatId, user.LastBotMessageId);
+    }
+
+    public async Task SaveBotScreenStateAsync(long telegramUserId, long chatId, int messageId, CancellationToken cancellationToken)
+    {
+        var user = await dbContext.Users.FindAsync([telegramUserId], cancellationToken)
+            ?? throw new InvalidOperationException("Пользователь не найден.");
+
+        user.LastBotChatId = chatId;
+        user.LastBotMessageId = messageId;
+        user.UpdatedAtUtc = timeProvider.UtcNow;
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
     public async Task<bool> SetCreatorPermissionAsync(long actingTelegramUserId, long targetTelegramUserId, bool allowed, CancellationToken cancellationToken)
     {
         var context = await userContextService.GetUserContextAsync(actingTelegramUserId, cancellationToken);

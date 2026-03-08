@@ -16,6 +16,7 @@ public sealed class StartupDatabaseInitializer(
     public async Task InitializeAsync(CancellationToken cancellationToken)
     {
         await dbContext.Database.EnsureCreatedAsync(cancellationToken);
+        await RepairLegacyUserSchemaAsync(cancellationToken);
         await RepairLegacySubscriptionSchemaAsync(cancellationToken);
 
         var superAdminId = securityOptions.Value.SuperAdminTelegramUserId;
@@ -44,6 +45,64 @@ public sealed class StartupDatabaseInitializer(
         }
 
         await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task RepairLegacyUserSchemaAsync(CancellationToken cancellationToken)
+    {
+        if (!dbContext.Database.IsRelational())
+        {
+            return;
+        }
+
+        var connection = dbContext.Database.GetDbConnection();
+        await connection.OpenAsync(cancellationToken);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = "PRAGMA table_info('Users');";
+
+        var columns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
+        {
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                columns.Add(reader.GetString(1));
+            }
+        }
+
+        var statements = new List<string>();
+        if (!columns.Contains("LastBotChatId"))
+        {
+            statements.Add("ALTER TABLE \"Users\" ADD COLUMN \"LastBotChatId\" INTEGER NULL;");
+        }
+
+        if (!columns.Contains("LastBotMessageId"))
+        {
+            statements.Add("ALTER TABLE \"Users\" ADD COLUMN \"LastBotMessageId\" INTEGER NULL;");
+        }
+
+        if (statements.Count == 0)
+        {
+            return;
+        }
+
+        logger.LogWarning("Legacy user schema detected. Repairing Users table.");
+
+        if (connection is SqliteConnection sqliteConnection)
+        {
+            foreach (var statement in statements)
+            {
+                await using var repairCommand = sqliteConnection.CreateCommand();
+                repairCommand.CommandText = statement;
+                await repairCommand.ExecuteNonQueryAsync(cancellationToken);
+            }
+        }
+        else
+        {
+            foreach (var statement in statements)
+            {
+                await dbContext.Database.ExecuteSqlRawAsync(statement, cancellationToken);
+            }
+        }
     }
 
     private async Task RepairLegacySubscriptionSchemaAsync(CancellationToken cancellationToken)

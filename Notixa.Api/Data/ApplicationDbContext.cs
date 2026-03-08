@@ -26,6 +26,8 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
             entity.HasKey(x => x.TelegramUserId);
             entity.Property(x => x.DisplayName).HasMaxLength(200);
             entity.Property(x => x.Username).HasMaxLength(200);
+            entity.Property(x => x.LastBotChatId);
+            entity.Property(x => x.LastBotMessageId);
         });
 
         modelBuilder.Entity<ServiceDefinition>(entity =>

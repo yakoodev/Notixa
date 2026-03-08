@@ -7,6 +7,10 @@ public interface IPlatformAdministrationService
 {
     Task RegisterOrUpdateUserAsync(global::Telegram.Bot.Types.User telegramUser, CancellationToken cancellationToken);
 
+    Task<BotScreenState> GetBotScreenStateAsync(long telegramUserId, CancellationToken cancellationToken);
+
+    Task SaveBotScreenStateAsync(long telegramUserId, long chatId, int messageId, CancellationToken cancellationToken);
+
     Task<bool> SetCreatorPermissionAsync(long actingTelegramUserId, long targetTelegramUserId, bool allowed, CancellationToken cancellationToken);
 
     Task<CreateServiceResult> CreateServiceAsync(long actingTelegramUserId, string name, string description, CancellationToken cancellationToken);

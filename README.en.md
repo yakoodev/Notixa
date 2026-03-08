@@ -11,9 +11,10 @@ Notixa is a small ASP.NET Core 8 service that combines:
 
 - create notification services from Telegram
 - issue general or personal invite codes
-- subscribe Telegram users to services
+- subscribe Telegram users to services with inline confirmation
 - send raw text notifications or render stored templates
 - manage service admins from the bot
+- use screen-style bot navigation with inline buttons and unsubscribe confirmation
 - run locally with SQLite or in Docker
 
 ## Stack
@@ -92,6 +93,14 @@ The container listens on `http://localhost:8080`.
 
 Any non-command text is treated as an invite code.
 
+## Telegram UX
+
+- `/start` creates a new bot screen with inline navigation.
+- Inline button clicks edit only the message where the button was pressed.
+- Invite redemption is confirmed with `✅ Yes` and `❌ No` buttons.
+- Unsubscribe starts from `🗑️ Unsubscribe from {ServiceName}` and also requires confirmation.
+- Service notifications are sent as separate messages and start with the service name: `🔔 {ServiceName}`.
+
 ## Notification API
 
 Send either direct text or a stored template to all subscribers or to targeted recipients.
@@ -137,8 +146,8 @@ curl -X POST http://localhost:5212/api/notifications/send \
 2. Send `/start` to the bot.
 3. Create a service with `/create_service Orders | Order notifications`.
 4. Copy the `PublicId` and `ServiceKey` from the bot response.
-5. Generate an invite with `/generate_general_invite <PublicId>`.
-6. Redeem the invite from the target Telegram account.
+5. Open `🛠️ My Services` and generate an invite with a button or `/generate_general_invite <PublicId>`.
+6. Redeem the invite from the target Telegram account and confirm the subscription with `✅ Yes`.
 7. Send a test notification through `/api/notifications/send`.
 
 ## Tests

@@ -15,7 +15,7 @@ namespace Notixa.Tests;
 public sealed class TelegramUpdateProcessorTests
 {
     [Fact]
-    public async Task ProcessAsync_WithInviteCode_SendsConfirmationButtons()
+    public async Task ProcessAsync_WithInviteCode_RendersConfirmationScreen()
     {
         var sender = new FakeTelegramMessageSender();
         var provider = TestServiceFactory.Create(777, sender, new FakeTimeProvider(DateTimeOffset.UtcNow));
@@ -28,28 +28,47 @@ public sealed class TelegramUpdateProcessorTests
         var service = await administration.CreateServiceAsync(777, "Orders", "Order notifications", CancellationToken.None);
         var invite = await administration.CreateInviteAsync(777, service.PublicId, Notixa.Api.Domain.Enums.InviteCodeType.General, null, 1, 24, CancellationToken.None);
 
-        await processor.ProcessAsync(new Update
-        {
-            Id = 1,
-            Message = new Message
-            {
-                Date = DateTime.UtcNow,
-                Text = invite.InviteCode,
-                Chat = new Chat { Id = 222, Type = ChatType.Private },
-                From = new User { Id = 222, FirstName = "Test" }
-            }
-        }, CancellationToken.None);
+        await processor.ProcessAsync(BuildMessageUpdate(1, 222, invite.InviteCode), CancellationToken.None);
 
-        var message = Assert.Single(sender.SentMessages);
-        Assert.Contains("Вы хотите подписаться на уведомления от сервиса <b>Orders</b>?", message.Text);
-        Assert.DoesNotContain("внешний ключ", message.Text, StringComparison.OrdinalIgnoreCase);
-        var markup = Assert.IsType<InlineKeyboardMarkup>(message.ReplyMarkup);
+        var screen = Assert.Single(sender.ScreenMessages);
+        Assert.False(screen.WasEdited);
+        Assert.Contains("Вы хотите подписаться на уведомления от сервиса <b>Orders</b>?", screen.Text);
+        Assert.DoesNotContain("внешний ключ", screen.Text, StringComparison.OrdinalIgnoreCase);
+        var markup = Assert.IsType<InlineKeyboardMarkup>(screen.ReplyMarkup);
         Assert.Contains(markup.InlineKeyboard.SelectMany(x => x), x => x.CallbackData == $"sub:yes:{invite.InviteCode}");
         Assert.Contains(markup.InlineKeyboard.SelectMany(x => x), x => x.CallbackData == $"sub:no:{invite.InviteCode}");
+
+        var state = await administration.GetBotScreenStateAsync(222, CancellationToken.None);
+        Assert.Equal(222, state.LastBotChatId);
+        Assert.Equal(screen.MessageId, state.LastBotMessageId);
     }
 
     [Fact]
-    public async Task ProcessAsync_CallbackYes_CreatesSubscription()
+    public async Task ProcessAsync_SecondCommand_CreatesNewScreen()
+    {
+        var sender = new FakeTelegramMessageSender();
+        var provider = TestServiceFactory.Create(777, sender, new FakeTimeProvider(DateTimeOffset.UtcNow));
+        using var scope = provider.CreateScope();
+        var initializer = scope.ServiceProvider.GetRequiredService<StartupDatabaseInitializer>();
+        await initializer.InitializeAsync(CancellationToken.None);
+        var administration = scope.ServiceProvider.GetRequiredService<IPlatformAdministrationService>();
+        var processor = CreateProcessor(scope, sender);
+
+        await processor.ProcessAsync(BuildMessageUpdate(1, 222, "/start"), CancellationToken.None);
+
+        var service = await administration.CreateServiceAsync(777, "Orders", "Order notifications", CancellationToken.None);
+        var invite = await administration.CreateInviteAsync(777, service.PublicId, Notixa.Api.Domain.Enums.InviteCodeType.General, null, 1, 24, CancellationToken.None);
+
+        await processor.ProcessAsync(BuildMessageUpdate(2, 222, invite.InviteCode), CancellationToken.None);
+
+        Assert.Equal(2, sender.ScreenMessages.Count);
+        Assert.False(sender.ScreenMessages[0].WasEdited);
+        Assert.False(sender.ScreenMessages[1].WasEdited);
+        Assert.NotEqual(sender.ScreenMessages[0].MessageId, sender.ScreenMessages[1].MessageId);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_CallbackYes_CreatesSubscriptionAndEditsScreen()
     {
         var sender = new FakeTelegramMessageSender();
         var provider = TestServiceFactory.Create(777, sender, new FakeTimeProvider(DateTimeOffset.UtcNow));
@@ -62,34 +81,24 @@ public sealed class TelegramUpdateProcessorTests
         var service = await administration.CreateServiceAsync(777, "Orders", "Order notifications", CancellationToken.None);
         var invite = await administration.CreateInviteAsync(777, service.PublicId, Notixa.Api.Domain.Enums.InviteCodeType.General, null, 1, 24, CancellationToken.None);
 
-        await processor.ProcessAsync(new Update
-        {
-            Id = 2,
-            CallbackQuery = new CallbackQuery
-            {
-                Id = "cb-1",
-                Data = $"sub:yes:{invite.InviteCode}",
-                From = new User { Id = 222, FirstName = "Test" },
-                Message = new Message
-                {
-                    Date = DateTime.UtcNow,
-                    Chat = new Chat { Id = 222, Type = ChatType.Private }
-                }
-            }
-        }, CancellationToken.None);
+        await processor.ProcessAsync(BuildMessageUpdate(1, 222, invite.InviteCode), CancellationToken.None);
+        var messageId = sender.ScreenMessages[^1].MessageId;
+
+        await processor.ProcessAsync(BuildCallbackUpdate(2, 222, messageId, $"sub:yes:{invite.InviteCode}", "cb-1"), CancellationToken.None);
 
         var subscriptions = await administration.GetSubscriptionsAsync(222, CancellationToken.None);
         Assert.Single(subscriptions);
-        var message = Assert.Single(sender.SentMessages);
-        Assert.Contains("✅ Подписка подключена", message.Text);
-        Assert.Contains("/unsubscribe", message.Text);
-        Assert.DoesNotContain("внешний ключ", message.Text, StringComparison.OrdinalIgnoreCase);
-        var markup = Assert.IsType<InlineKeyboardMarkup>(message.ReplyMarkup);
-        Assert.Contains(markup.InlineKeyboard.SelectMany(x => x), x => x.CallbackData == $"unsub:{service.PublicId}");
+        var screen = sender.ScreenMessages[^1];
+        Assert.True(screen.WasEdited);
+        Assert.Contains("✅ Подписка подключена", screen.Text);
+        Assert.Contains("/unsubscribe", screen.Text);
+        Assert.DoesNotContain("внешний ключ", screen.Text, StringComparison.OrdinalIgnoreCase);
+        var markup = Assert.IsType<InlineKeyboardMarkup>(screen.ReplyMarkup);
+        Assert.Contains(markup.InlineKeyboard.SelectMany(x => x), x => x.CallbackData == $"unsub:ask:{service.PublicId}");
     }
 
     [Fact]
-    public async Task ProcessAsync_CallbackNo_DoesNotCreateSubscription()
+    public async Task ProcessAsync_CallbackNo_DoesNotCreateSubscriptionAndEditsScreen()
     {
         var sender = new FakeTelegramMessageSender();
         var provider = TestServiceFactory.Create(777, sender, new FakeTimeProvider(DateTimeOffset.UtcNow));
@@ -102,29 +111,19 @@ public sealed class TelegramUpdateProcessorTests
         var service = await administration.CreateServiceAsync(777, "Orders", "Order notifications", CancellationToken.None);
         var invite = await administration.CreateInviteAsync(777, service.PublicId, Notixa.Api.Domain.Enums.InviteCodeType.General, null, 1, 24, CancellationToken.None);
 
-        await processor.ProcessAsync(new Update
-        {
-            Id = 3,
-            CallbackQuery = new CallbackQuery
-            {
-                Id = "cb-2",
-                Data = $"sub:no:{invite.InviteCode}",
-                From = new User { Id = 222, FirstName = "Test" },
-                Message = new Message
-                {
-                    Date = DateTime.UtcNow,
-                    Chat = new Chat { Id = 222, Type = ChatType.Private }
-                }
-            }
-        }, CancellationToken.None);
+        await processor.ProcessAsync(BuildMessageUpdate(1, 222, invite.InviteCode), CancellationToken.None);
+        var messageId = sender.ScreenMessages[^1].MessageId;
+
+        await processor.ProcessAsync(BuildCallbackUpdate(2, 222, messageId, $"sub:no:{invite.InviteCode}", "cb-2"), CancellationToken.None);
 
         var subscriptions = await administration.GetSubscriptionsAsync(222, CancellationToken.None);
         Assert.Empty(subscriptions);
-        Assert.Contains(sender.SentMessages, x => x.Text.Contains("Подписка отменена"));
+        Assert.Contains("Подписка отменена", sender.ScreenMessages[^1].Text);
+        Assert.True(sender.ScreenMessages[^1].WasEdited);
     }
 
     [Fact]
-    public async Task ProcessAsync_SubscriptionsCommand_ShowsReadyUnsubscribeCommandWithoutExternalKey()
+    public async Task ProcessAsync_SubscriptionsCommand_ShowsUnsubscribeButtonsWithoutExternalKey()
     {
         var sender = new FakeTelegramMessageSender();
         var provider = TestServiceFactory.Create(777, sender, new FakeTimeProvider(DateTimeOffset.UtcNow));
@@ -138,28 +137,19 @@ public sealed class TelegramUpdateProcessorTests
         var invite = await administration.CreateInviteAsync(777, service.PublicId, Notixa.Api.Domain.Enums.InviteCodeType.Personal, "user-2", 1, 24, CancellationToken.None);
         await administration.RedeemInviteAsync(222, invite.InviteCode, CancellationToken.None);
 
-        await processor.ProcessAsync(new Update
-        {
-            Id = 4,
-            Message = new Message
-            {
-                Date = DateTime.UtcNow,
-                Text = "/subscriptions",
-                Chat = new Chat { Id = 222, Type = ChatType.Private },
-                From = new User { Id = 222, FirstName = "Test" }
-            }
-        }, CancellationToken.None);
+        await processor.ProcessAsync(BuildMessageUpdate(1, 222, "/subscriptions"), CancellationToken.None);
 
-        var message = Assert.Single(sender.SentMessages);
-        Assert.Contains("<b>Orders</b>", message.Text);
-        Assert.Contains($"/unsubscribe {service.PublicId}", message.Text);
-        Assert.DoesNotContain("внешний ключ", message.Text, StringComparison.OrdinalIgnoreCase);
-        var markup = Assert.IsType<InlineKeyboardMarkup>(message.ReplyMarkup);
-        Assert.Contains(markup.InlineKeyboard.SelectMany(x => x), x => x.CallbackData == $"unsub:{service.PublicId}");
+        var screen = Assert.Single(sender.ScreenMessages);
+        Assert.Contains("<b>Orders</b>", screen.Text);
+        Assert.Contains($"/unsubscribe {service.PublicId}", screen.Text);
+        Assert.DoesNotContain("внешний ключ", screen.Text, StringComparison.OrdinalIgnoreCase);
+        var markup = Assert.IsType<InlineKeyboardMarkup>(screen.ReplyMarkup);
+        Assert.Contains(markup.InlineKeyboard.SelectMany(x => x), x => x.Text == "🗑️ Отписаться от Orders");
+        Assert.Contains(markup.InlineKeyboard.SelectMany(x => x), x => x.CallbackData == $"unsub:ask:{service.PublicId}");
     }
 
     [Fact]
-    public async Task ProcessAsync_WhenAlreadySubscribed_ShowsReadyUnsubscribeCommandWithoutExternalKey()
+    public async Task ProcessAsync_WhenAlreadySubscribed_ShowsReadyUnsubscribeActionWithoutExternalKey()
     {
         var sender = new FakeTelegramMessageSender();
         var provider = TestServiceFactory.Create(777, sender, new FakeTimeProvider(DateTimeOffset.UtcNow));
@@ -173,28 +163,18 @@ public sealed class TelegramUpdateProcessorTests
         var invite = await administration.CreateInviteAsync(777, service.PublicId, Notixa.Api.Domain.Enums.InviteCodeType.Personal, "user-2", 1, 24, CancellationToken.None);
         await administration.RedeemInviteAsync(222, invite.InviteCode, CancellationToken.None);
 
-        await processor.ProcessAsync(new Update
-        {
-            Id = 5,
-            Message = new Message
-            {
-                Date = DateTime.UtcNow,
-                Text = invite.InviteCode,
-                Chat = new Chat { Id = 222, Type = ChatType.Private },
-                From = new User { Id = 222, FirstName = "Test" }
-            }
-        }, CancellationToken.None);
+        await processor.ProcessAsync(BuildMessageUpdate(1, 222, invite.InviteCode), CancellationToken.None);
 
-        var message = Assert.Single(sender.SentMessages);
-        Assert.Contains("Вы уже подписаны", message.Text);
-        Assert.Contains($"/unsubscribe {service.PublicId}", message.Text);
-        Assert.DoesNotContain("внешний ключ", message.Text, StringComparison.OrdinalIgnoreCase);
-        var markup = Assert.IsType<InlineKeyboardMarkup>(message.ReplyMarkup);
-        Assert.Contains(markup.InlineKeyboard.SelectMany(x => x), x => x.CallbackData == $"unsub:{service.PublicId}");
+        var screen = Assert.Single(sender.ScreenMessages);
+        Assert.Contains("Вы уже подписаны", screen.Text);
+        Assert.Contains($"/unsubscribe {service.PublicId}", screen.Text);
+        Assert.DoesNotContain("внешний ключ", screen.Text, StringComparison.OrdinalIgnoreCase);
+        var markup = Assert.IsType<InlineKeyboardMarkup>(screen.ReplyMarkup);
+        Assert.Contains(markup.InlineKeyboard.SelectMany(x => x), x => x.CallbackData == $"unsub:ask:{service.PublicId}");
     }
 
     [Fact]
-    public async Task ProcessAsync_UnsubscribeCallback_RemovesSubscription()
+    public async Task ProcessAsync_UnsubscribeFlow_AsksConfirmationAndRemovesSubscription()
     {
         var sender = new FakeTelegramMessageSender();
         var provider = TestServiceFactory.Create(777, sender, new FakeTimeProvider(DateTimeOffset.UtcNow));
@@ -208,27 +188,80 @@ public sealed class TelegramUpdateProcessorTests
         var invite = await administration.CreateInviteAsync(777, service.PublicId, Notixa.Api.Domain.Enums.InviteCodeType.General, null, 1, 24, CancellationToken.None);
         await administration.RedeemInviteAsync(222, invite.InviteCode, CancellationToken.None);
 
-        await processor.ProcessAsync(new Update
-        {
-            Id = 6,
-            CallbackQuery = new CallbackQuery
-            {
-                Id = "cb-3",
-                Data = $"unsub:{service.PublicId}",
-                From = new User { Id = 222, FirstName = "Test" },
-                Message = new Message
-                {
-                    Date = DateTime.UtcNow,
-                    Chat = new Chat { Id = 222, Type = ChatType.Private }
-                }
-            }
-        }, CancellationToken.None);
+        await processor.ProcessAsync(BuildMessageUpdate(1, 222, "/subscriptions"), CancellationToken.None);
+        var messageId = sender.ScreenMessages[^1].MessageId;
+
+        await processor.ProcessAsync(BuildCallbackUpdate(2, 222, messageId, $"unsub:ask:{service.PublicId}", "cb-3"), CancellationToken.None);
+        Assert.Contains("Вы хотите отписаться от сервиса <b>Orders</b>?", sender.ScreenMessages[^1].Text);
+        var confirmMarkup = Assert.IsType<InlineKeyboardMarkup>(sender.ScreenMessages[^1].ReplyMarkup);
+        Assert.Contains(confirmMarkup.InlineKeyboard.SelectMany(x => x), x => x.CallbackData == $"unsub:yes:{service.PublicId}");
+        Assert.Contains(confirmMarkup.InlineKeyboard.SelectMany(x => x), x => x.CallbackData == $"unsub:no:{service.PublicId}");
+
+        await processor.ProcessAsync(BuildCallbackUpdate(3, 222, messageId, $"unsub:yes:{service.PublicId}", "cb-4"), CancellationToken.None);
 
         var subscriptions = await administration.GetSubscriptionsAsync(222, CancellationToken.None);
         Assert.Empty(subscriptions);
-        var message = Assert.Single(sender.SentMessages);
-        Assert.Contains("Подписка отключена", message.Text);
+        Assert.Contains("Подписка отключена", sender.ScreenMessages[^1].Text);
+        Assert.True(sender.ScreenMessages[^1].WasEdited);
     }
+
+    [Fact]
+    public async Task ProcessAsync_UnsubscribeCancel_ReturnsToSubscriptionsScreen()
+    {
+        var sender = new FakeTelegramMessageSender();
+        var provider = TestServiceFactory.Create(777, sender, new FakeTimeProvider(DateTimeOffset.UtcNow));
+        using var scope = provider.CreateScope();
+        var initializer = scope.ServiceProvider.GetRequiredService<StartupDatabaseInitializer>();
+        await initializer.InitializeAsync(CancellationToken.None);
+        var administration = scope.ServiceProvider.GetRequiredService<IPlatformAdministrationService>();
+        var processor = CreateProcessor(scope, sender);
+
+        var service = await administration.CreateServiceAsync(777, "Orders", "Order notifications", CancellationToken.None);
+        var invite = await administration.CreateInviteAsync(777, service.PublicId, Notixa.Api.Domain.Enums.InviteCodeType.General, null, 1, 24, CancellationToken.None);
+        await administration.RedeemInviteAsync(222, invite.InviteCode, CancellationToken.None);
+
+        await processor.ProcessAsync(BuildMessageUpdate(1, 222, "/subscriptions"), CancellationToken.None);
+        var messageId = sender.ScreenMessages[^1].MessageId;
+
+        await processor.ProcessAsync(BuildCallbackUpdate(2, 222, messageId, $"unsub:ask:{service.PublicId}", "cb-5"), CancellationToken.None);
+        await processor.ProcessAsync(BuildCallbackUpdate(3, 222, messageId, $"unsub:no:{service.PublicId}", "cb-6"), CancellationToken.None);
+
+        var subscriptions = await administration.GetSubscriptionsAsync(222, CancellationToken.None);
+        Assert.Single(subscriptions);
+        Assert.Contains("📬 Мои подписки", sender.ScreenMessages[^1].Text);
+        Assert.True(sender.ScreenMessages[^1].WasEdited);
+    }
+
+    private static Update BuildMessageUpdate(int updateId, long telegramUserId, string text) =>
+        new()
+        {
+            Id = updateId,
+            Message = new Message
+            {
+                Date = DateTime.UtcNow,
+                Text = text,
+                Chat = new Chat { Id = telegramUserId, Type = ChatType.Private },
+                From = new User { Id = telegramUserId, FirstName = "Test" }
+            }
+        };
+
+    private static Update BuildCallbackUpdate(int updateId, long telegramUserId, int messageId, string data, string callbackId) =>
+        new()
+        {
+            Id = updateId,
+            CallbackQuery = new CallbackQuery
+            {
+                Id = callbackId,
+                Data = data,
+                From = new User { Id = telegramUserId, FirstName = "Test" },
+                Message = new Message
+                {
+                    Id = messageId,
+                    Date = DateTime.UtcNow,
+                    Chat = new Chat { Id = telegramUserId, Type = ChatType.Private }
+                }
+            }
+        };
 
     private static TelegramUpdateProcessor CreateProcessor(IServiceScope scope, FakeTelegramMessageSender sender) =>
         new(
