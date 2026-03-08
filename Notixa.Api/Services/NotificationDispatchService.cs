@@ -3,6 +3,7 @@ using Notixa.Api.Contracts.Notifications;
 using Notixa.Api.Data;
 using Notixa.Api.Domain.Entities;
 using Notixa.Api.Domain.Enums;
+using System.Net;
 
 namespace Notixa.Api.Services;
 
@@ -84,7 +85,11 @@ public sealed class NotificationDispatchService(
         {
             try
             {
-                await telegramMessageSender.SendAsync(recipient.TelegramUserId, renderResult.RenderedText, renderResult.ParseMode, cancellationToken);
+                await telegramMessageSender.SendAsync(
+                    recipient.TelegramUserId,
+                    FormatNotificationText(service.Name, renderResult.RenderedText, renderResult.ParseMode),
+                    renderResult.ParseMode,
+                    cancellationToken);
             }
             catch (Exception ex)
             {
@@ -110,4 +115,11 @@ public sealed class NotificationDispatchService(
 
         return new NotificationDispatchResult(log.Id, log.ResolvedRecipientsCount, log.SuccessfulDeliveriesCount, log.FailedDeliveriesCount, errors);
     }
+
+    private static string FormatNotificationText(string serviceName, string body, TemplateParseMode parseMode) =>
+        parseMode switch
+        {
+            TemplateParseMode.Html => $"<b>🔔 {WebUtility.HtmlEncode(serviceName)}</b>\n\n{body}",
+            _ => $"🔔 {serviceName}\n\n{body}"
+        };
 }

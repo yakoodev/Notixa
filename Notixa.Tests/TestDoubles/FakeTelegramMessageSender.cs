@@ -5,7 +5,7 @@ namespace Notixa.Tests.TestDoubles;
 
 public sealed class FakeTelegramMessageSender : ITelegramMessageSender
 {
-    public List<(long UserId, string Text, TemplateParseMode ParseMode)> SentMessages { get; } = [];
+    public List<(long UserId, string Text, TemplateParseMode ParseMode, global::Telegram.Bot.Types.ReplyMarkups.ReplyMarkup? ReplyMarkup)> SentMessages { get; } = [];
 
     public Task SendAsync(
         long telegramUserId,
@@ -14,7 +14,7 @@ public sealed class FakeTelegramMessageSender : ITelegramMessageSender
         CancellationToken cancellationToken,
         global::Telegram.Bot.Types.ReplyMarkups.ReplyMarkup? replyMarkup = null)
     {
-        SentMessages.Add((telegramUserId, text, parseMode));
+        SentMessages.Add((telegramUserId, text, parseMode, replyMarkup));
         return Task.CompletedTask;
     }
 }

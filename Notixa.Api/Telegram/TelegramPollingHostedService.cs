@@ -26,12 +26,21 @@ public sealed class TelegramPollingHostedService(
 
         var client = botClientAccessor.Client!;
         var offset = 0;
+        var transientFailureCount = 0;
 
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
                 var updates = await client.GetUpdates(offset, timeout: 30, cancellationToken: stoppingToken);
+                if (TelegramPollingLogPolicy.ShouldLogRecovery(transientFailureCount))
+                {
+                    logger.LogInformation(
+                        "Telegram polling recovered after {FailureCount} transient failures.",
+                        transientFailureCount);
+                }
+
+                transientFailureCount = 0;
                 foreach (var update in updates)
                 {
                     offset = update.Id + 1;
@@ -44,6 +53,24 @@ public sealed class TelegramPollingHostedService(
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
                 break;
+            }
+            catch (Exception ex) when (TelegramPollingErrorClassifier.IsTransient(ex))
+            {
+                transientFailureCount++;
+                var delay = TelegramPollingBackoff.GetDelay(transientFailureCount);
+                logger.LogDebug(
+                    ex,
+                    "Telegram polling transient failure #{FailureCount}. Retrying in {DelaySeconds} seconds.",
+                    transientFailureCount,
+                    delay.TotalSeconds);
+                if (TelegramPollingLogPolicy.ShouldEscalateWarning(transientFailureCount))
+                {
+                    logger.LogWarning(
+                        "Telegram polling is degraded after {FailureCount} transient failures in a row.",
+                        transientFailureCount);
+                }
+
+                await Task.Delay(delay, stoppingToken);
             }
             catch (Exception ex)
             {

@@ -17,7 +17,7 @@ public sealed class BotClientAccessor : IBotClientAccessor
                 return null;
             }
 
-            return new TelegramBotClient(options.Value.BotToken.Trim());
+            return TelegramBotClientFactory.Create(options.Value.BotToken.Trim());
         });
     }
 

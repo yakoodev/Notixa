@@ -1,5 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.EntityFrameworkCore;
 using Notixa.Api.Data;
+using Notixa.Api.Contracts;
 using Notixa.Api.Domain.Enums;
 using Notixa.Api.Services;
 using Notixa.Tests.TestDoubles;
@@ -49,6 +51,24 @@ public sealed class PlatformAdministrationServiceTests
 
         Assert.False(string.IsNullOrWhiteSpace(result.PublicId));
         Assert.StartsWith("svc_", result.ServiceKey);
+    }
+
+    [Theory]
+    [InlineData("   ", "Description", "Название сервиса не может быть пустым.")]
+    [InlineData("Название", "Description", "Замените шаблонное значение 'Название' на реальное имя сервиса.")]
+    [InlineData("Orders", "Описание", "Замените шаблонное значение 'Описание' на реальное описание сервиса.")]
+    public async Task CreateServiceAsync_RejectsEmptyOrPlaceholderValues(string name, string description, string expectedMessage)
+    {
+        var provider = TestServiceFactory.Create(777, new FakeTelegramMessageSender(), new FakeTimeProvider(DateTimeOffset.UtcNow));
+        using var scope = provider.CreateScope();
+        var initializer = scope.ServiceProvider.GetRequiredService<StartupDatabaseInitializer>();
+        await initializer.InitializeAsync(CancellationToken.None);
+        var service = scope.ServiceProvider.GetRequiredService<IPlatformAdministrationService>();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.CreateServiceAsync(777, name, description, CancellationToken.None));
+
+        Assert.Equal(expectedMessage, exception.Message);
     }
 
     [Fact]
@@ -113,6 +133,68 @@ public sealed class PlatformAdministrationServiceTests
         time.UtcNow = time.UtcNow.AddHours(2);
         var expired = await service.RedeemInviteAsync(444, expiringInvite.InviteCode, CancellationToken.None);
         Assert.Equal(Notixa.Api.Contracts.RedeemInviteStatus.Invalid, expired.Status);
+    }
+
+    [Fact]
+    public async Task PreviewInviteAsync_ReturnsServiceWithoutConsumingInvite()
+    {
+        var provider = TestServiceFactory.Create(777, new FakeTelegramMessageSender(), new FakeTimeProvider(DateTimeOffset.UtcNow));
+        using var scope = provider.CreateScope();
+        var initializer = scope.ServiceProvider.GetRequiredService<StartupDatabaseInitializer>();
+        await initializer.InitializeAsync(CancellationToken.None);
+        var service = scope.ServiceProvider.GetRequiredService<IPlatformAdministrationService>();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+        var created = await service.CreateServiceAsync(777, "Orders", "Order notifications", CancellationToken.None);
+        var invite = await service.CreateInviteAsync(777, created.PublicId, InviteCodeType.General, null, 2, 24, CancellationToken.None);
+
+        var preview = await service.PreviewInviteAsync(222, invite.InviteCode, CancellationToken.None);
+        var storedInvite = await db.InviteCodes.SingleAsync(x => x.ServiceDefinitionId == db.Services.Single().Id, CancellationToken.None);
+
+        Assert.Equal(PreviewInviteStatus.Available, preview.Status);
+        Assert.Equal("Orders", preview.ServiceName);
+        Assert.Equal(0, storedInvite.UsageCount);
+    }
+
+    [Fact]
+    public async Task PreviewInviteAsync_ReturnsAlreadySubscribedForActiveSubscription()
+    {
+        var provider = TestServiceFactory.Create(777, new FakeTelegramMessageSender(), new FakeTimeProvider(DateTimeOffset.UtcNow));
+        using var scope = provider.CreateScope();
+        var initializer = scope.ServiceProvider.GetRequiredService<StartupDatabaseInitializer>();
+        await initializer.InitializeAsync(CancellationToken.None);
+        var service = scope.ServiceProvider.GetRequiredService<IPlatformAdministrationService>();
+
+        var created = await service.CreateServiceAsync(777, "Orders", "Order notifications", CancellationToken.None);
+        var invite = await service.CreateInviteAsync(777, created.PublicId, InviteCodeType.Personal, "customer-42", 1, 24, CancellationToken.None);
+        await service.RedeemInviteAsync(222, invite.InviteCode, CancellationToken.None);
+
+        var preview = await service.PreviewInviteAsync(222, invite.InviteCode, CancellationToken.None);
+
+        Assert.Equal(PreviewInviteStatus.AlreadySubscribed, preview.Status);
+        Assert.Equal("customer-42", preview.ExternalUserKey);
+    }
+
+    [Fact]
+    public async Task PreviewThenRedeem_ConsumesInviteOnlyOnce()
+    {
+        var provider = TestServiceFactory.Create(777, new FakeTelegramMessageSender(), new FakeTimeProvider(DateTimeOffset.UtcNow));
+        using var scope = provider.CreateScope();
+        var initializer = scope.ServiceProvider.GetRequiredService<StartupDatabaseInitializer>();
+        await initializer.InitializeAsync(CancellationToken.None);
+        var service = scope.ServiceProvider.GetRequiredService<IPlatformAdministrationService>();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+        var created = await service.CreateServiceAsync(777, "Orders", "Order notifications", CancellationToken.None);
+        var invite = await service.CreateInviteAsync(777, created.PublicId, InviteCodeType.General, null, 1, 24, CancellationToken.None);
+
+        var preview = await service.PreviewInviteAsync(222, invite.InviteCode, CancellationToken.None);
+        var redeem = await service.RedeemInviteAsync(222, invite.InviteCode, CancellationToken.None);
+        var storedInvite = await db.InviteCodes.SingleAsync(CancellationToken.None);
+
+        Assert.Equal(PreviewInviteStatus.Available, preview.Status);
+        Assert.Equal(Notixa.Api.Contracts.RedeemInviteStatus.Created, redeem.Status);
+        Assert.Equal(1, storedInvite.UsageCount);
     }
 
     [Fact]

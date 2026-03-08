@@ -21,6 +21,8 @@ public interface IPlatformAdministrationService
 
     Task<IReadOnlyCollection<long>> GetServiceAdminsAsync(long actingTelegramUserId, string servicePublicId, CancellationToken cancellationToken);
 
+    Task<PreviewInviteResult> PreviewInviteAsync(long telegramUserId, string inviteCode, CancellationToken cancellationToken);
+
     Task<RedeemInviteResult> RedeemInviteAsync(long telegramUserId, string inviteCode, CancellationToken cancellationToken);
 
     Task<bool> UnsubscribeAsync(long telegramUserId, string servicePublicId, CancellationToken cancellationToken);

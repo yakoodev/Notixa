@@ -127,7 +127,8 @@ public sealed class NotificationDispatchServiceTests
 
         Assert.Equal(1, result.ResolvedRecipientsCount);
         Assert.Single(sender.SentMessages);
-        Assert.Equal("Прямое уведомление", sender.SentMessages[0].Text);
+        Assert.Equal("🔔 Orders\n\nПрямое уведомление", sender.SentMessages[0].Text);
+        Assert.DoesNotContain("Название", sender.SentMessages[0].Text);
         Assert.Equal(TemplateParseMode.PlainText, sender.SentMessages[0].ParseMode);
     }
 
@@ -156,7 +157,8 @@ public sealed class NotificationDispatchServiceTests
 
         Assert.Equal(1, result.ResolvedRecipientsCount);
         Assert.Single(sender.SentMessages);
-        Assert.Equal("<b>Важное уведомление</b>", sender.SentMessages[0].Text);
+        Assert.Equal("<b>🔔 Orders</b>\n\n<b>Важное уведомление</b>", sender.SentMessages[0].Text);
+        Assert.DoesNotContain("Название", sender.SentMessages[0].Text);
         Assert.Equal(TemplateParseMode.Html, sender.SentMessages[0].ParseMode);
     }
 

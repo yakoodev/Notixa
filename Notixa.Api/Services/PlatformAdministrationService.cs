@@ -78,14 +78,36 @@ public sealed class PlatformAdministrationService(
             throw new InvalidOperationException("У вас нет прав на создание сервисов.");
         }
 
+        var normalizedName = name.Trim();
+        var normalizedDescription = description.Trim();
+        if (string.IsNullOrWhiteSpace(normalizedName))
+        {
+            throw new InvalidOperationException("Название сервиса не может быть пустым.");
+        }
+
+        if (string.IsNullOrWhiteSpace(normalizedDescription))
+        {
+            throw new InvalidOperationException("Описание сервиса не может быть пустым.");
+        }
+
+        if (string.Equals(normalizedName, "Название", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("Замените шаблонное значение 'Название' на реальное имя сервиса.");
+        }
+
+        if (string.Equals(normalizedDescription, "Описание", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("Замените шаблонное значение 'Описание' на реальное описание сервиса.");
+        }
+
         var now = timeProvider.UtcNow;
         var serviceKey = secretGenerator.GenerateServiceKey();
         var service = new ServiceDefinition
         {
             Id = Guid.NewGuid(),
             PublicId = await GenerateUniquePublicIdAsync(cancellationToken),
-            Name = name.Trim(),
-            Description = description.Trim(),
+            Name = normalizedName,
+            Description = normalizedDescription,
             ServiceKeyHash = secretHasher.Hash(serviceKey),
             CreatedAtUtc = now,
             UpdatedAtUtc = now
@@ -190,24 +212,44 @@ public sealed class PlatformAdministrationService(
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<PreviewInviteResult> PreviewInviteAsync(long telegramUserId, string inviteCode, CancellationToken cancellationToken)
+    {
+        var invite = await FindInviteAsync(inviteCode, cancellationToken);
+        if (invite is null)
+        {
+            return new PreviewInviteResult(PreviewInviteStatus.Invalid, null, null, null);
+        }
+
+        var subscription = await dbContext.Subscriptions.AsNoTracking()
+            .SingleOrDefaultAsync(
+                x => x.ServiceDefinitionId == invite.ServiceDefinitionId && x.TelegramUserId == telegramUserId,
+                cancellationToken);
+
+        if (subscription is not null && subscription.Status == SubscriptionStatus.Active)
+        {
+            return new PreviewInviteResult(
+                PreviewInviteStatus.AlreadySubscribed,
+                invite.ServiceDefinition.PublicId,
+                invite.ServiceDefinition.Name,
+                subscription.ExternalUserKey);
+        }
+
+        if (!IsInviteRedeemable(invite))
+        {
+            return new PreviewInviteResult(PreviewInviteStatus.Invalid, null, null, null);
+        }
+
+        return new PreviewInviteResult(
+            PreviewInviteStatus.Available,
+            invite.ServiceDefinition.PublicId,
+            invite.ServiceDefinition.Name,
+            invite.Type == InviteCodeType.Personal ? invite.ExternalUserKey : null);
+    }
+
     public async Task<RedeemInviteResult> RedeemInviteAsync(long telegramUserId, string inviteCode, CancellationToken cancellationToken)
     {
-        var inviteHash = secretHasher.Hash(inviteCode.Trim());
-        var invite = await dbContext.InviteCodes
-            .Include(x => x.ServiceDefinition)
-            .SingleOrDefaultAsync(x => x.CodeHash == inviteHash, cancellationToken);
-
-        if (invite is null || invite.IsRevoked)
-        {
-            return new RedeemInviteResult(RedeemInviteStatus.Invalid, null);
-        }
-
-        if (invite.ExpiresAtUtc.HasValue && invite.ExpiresAtUtc.Value < timeProvider.UtcNow)
-        {
-            return new RedeemInviteResult(RedeemInviteStatus.Invalid, null);
-        }
-
-        if (invite.UsageLimit.HasValue && invite.UsageCount >= invite.UsageLimit.Value)
+        var invite = await FindValidInviteAsync(inviteCode, cancellationToken);
+        if (invite is null)
         {
             return new RedeemInviteResult(RedeemInviteStatus.Invalid, null);
         }
@@ -264,6 +306,40 @@ public sealed class PlatformAdministrationService(
         return new RedeemInviteResult(
             RedeemInviteStatus.Created,
             new SubscriptionListItem(invite.ServiceDefinition.PublicId, invite.ServiceDefinition.Name, subscription.ExternalUserKey));
+    }
+
+    private async Task<InviteCode?> FindValidInviteAsync(string inviteCode, CancellationToken cancellationToken)
+    {
+        var invite = await FindInviteAsync(inviteCode, cancellationToken);
+        return invite is not null && IsInviteRedeemable(invite) ? invite : null;
+    }
+
+    private async Task<InviteCode?> FindInviteAsync(string inviteCode, CancellationToken cancellationToken)
+    {
+        var inviteHash = secretHasher.Hash(inviteCode.Trim());
+        return await dbContext.InviteCodes
+            .Include(x => x.ServiceDefinition)
+            .SingleOrDefaultAsync(x => x.CodeHash == inviteHash, cancellationToken);
+    }
+
+    private bool IsInviteRedeemable(InviteCode invite)
+    {
+        if (invite is null || invite.IsRevoked)
+        {
+            return false;
+        }
+
+        if (invite.ExpiresAtUtc.HasValue && invite.ExpiresAtUtc.Value < timeProvider.UtcNow)
+        {
+            return false;
+        }
+
+        if (invite.UsageLimit.HasValue && invite.UsageCount >= invite.UsageLimit.Value)
+        {
+            return false;
+        }
+
+        return true;
     }
 
     public async Task<bool> UnsubscribeAsync(long telegramUserId, string servicePublicId, CancellationToken cancellationToken)
