@@ -74,32 +74,24 @@ docker compose up --build
 
 The container listens on `http://localhost:8080`.
 
-## Telegram Commands
-
-```text
-/start
-/subscriptions
-/services
-/create_service Name | Description
-/create_template serviceId templateKey Html | Hello, {{name}}
-/generate_general_invite serviceId [usageLimit] [expiresHours]
-/generate_personal_invite serviceId externalUserKey [expiresHours]
-/service_admins serviceId
-/add_service_admin serviceId telegramUserId
-/remove_service_admin serviceId telegramUserId
-/allow_creator telegramUserId
-/deny_creator telegramUserId
-```
-
-Any non-command text is treated as an invite code.
-
 ## Telegram UX
 
-- `/start` creates a new bot screen with inline navigation.
-- Inline button clicks edit only the message where the button was pressed.
-- Invite redemption is confirmed with `✅ Yes` and `❌ No` buttons.
-- Unsubscribe starts from `🗑️ Unsubscribe from {ServiceName}` and also requires confirmation.
-- Service notifications are sent as separate messages and start with the service name: `🔔 {ServiceName}`.
+The bot no longer uses slash commands as its working interface. Management now lives in inline buttons and screen-driven flows.
+
+What text input is still used for:
+
+- `/start` can be used as an entry point and reset back to the home screen
+- any other text is treated either as input for the active flow or as an invite code
+- manual commands like `/services` or `/create_service ...` are no longer part of the supported UX
+
+Main flows:
+
+- `/start` opens the home screen with `📬 My Subscriptions`, `🛠️ My Services`, and `👑 Creators` for the super-admin
+- inline button clicks edit only the message where the button was pressed
+- service creation, template creation, personal invites, and admin management are handled through buttons plus guided input
+- invite redemption is confirmed with `✅ Yes` and `❌ No` buttons
+- unsubscribe starts from `🗑️ Unsubscribe from {ServiceName}` and also requires confirmation
+- service notifications are sent as separate messages and start with the service name: `🔔 {ServiceName}`
 
 ## Notification API
 
@@ -310,9 +302,9 @@ curl -X POST http://localhost:5212/api/notifications/send \
 
 1. Start the app.
 2. Send `/start` to the bot.
-3. Create a service with `/create_service Orders | Order notifications`.
+3. Open `➕ Create Service` and complete the guided creation flow.
 4. Copy the `PublicId` and `ServiceKey` from the bot response.
-5. Open `🛠️ My Services` and generate an invite with a button or `/generate_general_invite <PublicId>`.
+5. Open `🛠️ My Services`, choose the service, and create a general invite with `🎟️ General Invite`.
 6. Redeem the invite from the target Telegram account and confirm the subscription with `✅ Yes`.
 7. Send a test notification through `/api/notifications/send`.
 

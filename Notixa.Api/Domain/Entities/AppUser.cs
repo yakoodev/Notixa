@@ -14,6 +14,16 @@ public sealed class AppUser
 
     public int? LastBotMessageId { get; set; }
 
+    public string? ActiveBotFlowType { get; set; }
+
+    public string? ActiveBotFlowStep { get; set; }
+
+    public string? ActiveBotFlowContextJson { get; set; }
+
+    public DateTimeOffset? ActiveBotFlowStartedAtUtc { get; set; }
+
+    public DateTimeOffset? ActiveBotFlowUpdatedAtUtc { get; set; }
+
     public DateTimeOffset CreatedAtUtc { get; set; }
 
     public DateTimeOffset UpdatedAtUtc { get; set; }

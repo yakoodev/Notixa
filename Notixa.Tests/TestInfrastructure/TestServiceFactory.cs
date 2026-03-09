@@ -23,6 +23,7 @@ public static class TestServiceFactory
         services.AddScoped<ITemplateRenderer, TemplateRenderer>();
         services.AddSingleton<ITelegramMessageSender>(sender);
         services.AddScoped<INotificationDispatchService, NotificationDispatchService>();
+        services.AddScoped<IBotConversationService, BotConversationService>();
         services.AddScoped<StartupDatabaseInitializer>();
         return services.BuildServiceProvider();
     }

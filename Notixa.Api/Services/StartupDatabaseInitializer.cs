@@ -80,6 +80,31 @@ public sealed class StartupDatabaseInitializer(
             statements.Add("ALTER TABLE \"Users\" ADD COLUMN \"LastBotMessageId\" INTEGER NULL;");
         }
 
+        if (!columns.Contains("ActiveBotFlowType"))
+        {
+            statements.Add("ALTER TABLE \"Users\" ADD COLUMN \"ActiveBotFlowType\" TEXT NULL;");
+        }
+
+        if (!columns.Contains("ActiveBotFlowStep"))
+        {
+            statements.Add("ALTER TABLE \"Users\" ADD COLUMN \"ActiveBotFlowStep\" TEXT NULL;");
+        }
+
+        if (!columns.Contains("ActiveBotFlowContextJson"))
+        {
+            statements.Add("ALTER TABLE \"Users\" ADD COLUMN \"ActiveBotFlowContextJson\" TEXT NULL;");
+        }
+
+        if (!columns.Contains("ActiveBotFlowStartedAtUtc"))
+        {
+            statements.Add("ALTER TABLE \"Users\" ADD COLUMN \"ActiveBotFlowStartedAtUtc\" TEXT NULL;");
+        }
+
+        if (!columns.Contains("ActiveBotFlowUpdatedAtUtc"))
+        {
+            statements.Add("ALTER TABLE \"Users\" ADD COLUMN \"ActiveBotFlowUpdatedAtUtc\" TEXT NULL;");
+        }
+
         if (statements.Count == 0)
         {
             return;

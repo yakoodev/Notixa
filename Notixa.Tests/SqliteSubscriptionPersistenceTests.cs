@@ -32,6 +32,7 @@ public sealed class SqliteSubscriptionPersistenceTests
             services.AddScoped<ITemplateRenderer, TemplateRenderer>();
             services.AddSingleton<ITelegramMessageSender>(sender);
             services.AddScoped<INotificationDispatchService, NotificationDispatchService>();
+            services.AddScoped<IBotConversationService, BotConversationService>();
             services.AddScoped<StartupDatabaseInitializer>();
 
             await using var provider = services.BuildServiceProvider();

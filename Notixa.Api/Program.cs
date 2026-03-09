@@ -46,6 +46,7 @@ builder.Services.AddScoped<ITemplateRenderer, TemplateRenderer>();
 builder.Services.AddScoped<IUserContextService, UserContextService>();
 builder.Services.AddScoped<IPlatformAdministrationService, PlatformAdministrationService>();
 builder.Services.AddScoped<INotificationDispatchService, NotificationDispatchService>();
+builder.Services.AddScoped<IBotConversationService, BotConversationService>();
 builder.Services.AddScoped<ITelegramUpdateProcessor, TelegramUpdateProcessor>();
 builder.Services.AddScoped<StartupDatabaseInitializer>();
 builder.Services.AddSingleton<IBotClientAccessor, BotClientAccessor>();
